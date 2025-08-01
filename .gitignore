@@ -69,7 +69,7 @@ $RECYCLE.BIN/
 *.msm
 *.msp
 *.lnk
-
+*xlsx
 # macOS
 .DS_Store
 .AppleDouble
@@ -118,3 +118,4 @@ scratch.py
 # Video presentation materials (working documents)
 Video_Guide_Streamlit.md
 Video_Presentation_Script.md
+Video_Presentation_Script_Updated.md

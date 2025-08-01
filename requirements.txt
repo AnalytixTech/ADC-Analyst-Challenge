@@ -1,0 +1,20 @@
+# Retail Performance Analysis Dashboard Requirements
+# Core data processing and analysis
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Web dashboard framework
+streamlit>=1.28.0
+
+# Interactive plotting and visualization
+plotly>=5.15.0
+
+# Additional data science libraries (optional but recommended)
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Data validation and type checking
+openpyxl>=3.1.0  # For Excel file support if needed
+
+# Performance optimization
+pyarrow>=12.0.0  # For faster CSV reading with pandas

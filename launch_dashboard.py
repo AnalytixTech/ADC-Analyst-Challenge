@@ -19,6 +19,12 @@ def launch_dashboard():
         # Change to the correct directory
         os.chdir(r"c:\Users\ToyeebKazeem\Documents\ADC\Analyst Challenge")
         
+        # Start the cleaning process
+        print("🧹 Cleaning up previous runs...")
+        subprocess.run([
+            "conda", "run", "--live-stream", "--name", "base", 
+            "python", "data_cleaning.py"
+        ])  
         # Start the Streamlit app
         print("🌐 Dashboard will open at: http://localhost:8501")
         print("⏹️  To stop the dashboard, press Ctrl+C")

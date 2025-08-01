@@ -63,28 +63,42 @@ st.markdown("""
 
 @st.cache_data
 def load_and_process_data():
-    """Load and process the retail data"""
+    """Load pre-cleaned retail data"""
     try:
-        df = pd.read_csv('data.csv', encoding='latin-1')
+        # Try to load cleaned data first
+        try:
+            df = pd.read_csv('data_cleaned.csv', encoding='utf-8')
+            st.sidebar.success("Using pre-cleaned data")
+        except FileNotFoundError:
+            st.sidebar.warning("Cleaned data not found. Please run data_cleaning.py first!")
+            st.error("""
+            **Data cleaning required!**
+            
+            Please run the data cleaning script first:
+            ```bash
+            python data_cleaning.py
+            ```
+            
+            This will create the cleaned dataset needed for the dashboard.
+            """)
+            return None
         
-        # Convert dates and calculate revenue
-        df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
-        df['Revenue'] = df['Quantity'] * df['UnitPrice']
+        # Verify required columns exist
+        required_columns = ['InvoiceDate', 'Revenue', 'CustomerID', 'Month', 'DayOfWeek', 'Hour', 'Date', 'Country']
+        missing_columns = [col for col in required_columns if col not in df.columns]
         
-        # Clean data
-        df = df[df['Quantity'] > 0]
-        df = df[df['UnitPrice'] > 0]
-        df = df.dropna(subset=['CustomerID'])
+        if missing_columns:
+            st.error(f"Missing required columns: {missing_columns}")
+            return None
         
-        # Add time components
-        df['Year'] = df['InvoiceDate'].dt.year
-        df['Month'] = df['InvoiceDate'].dt.month
-        df['MonthName'] = df['InvoiceDate'].dt.strftime('%B')
-        df['DayOfWeek'] = df['InvoiceDate'].dt.day_name()
-        df['Hour'] = df['InvoiceDate'].dt.hour
-        df['Date'] = df['InvoiceDate'].dt.date
+        # Convert date columns that might have been saved as strings
+        if df['InvoiceDate'].dtype == 'object':
+            df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+        if df['Date'].dtype == 'object':
+            df['Date'] = pd.to_datetime(df['Date']).dt.date
         
         return df
+        
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None
@@ -100,28 +114,28 @@ def create_metrics_section(df):
     
     with col1:
         st.metric(
-            label="💰 Total Revenue",
+            label="Total Revenue",
             value=f"£{total_revenue:,.0f}",
             delta=f"{total_revenue/1_000_000:.1f}M"
         )
     
     with col2:
         st.metric(
-            label="📈 Transactions", 
+            label="Transactions", 
             value=f"{total_transactions:,}",
             delta="397K+"
         )
     
     with col3:
         st.metric(
-            label="👥 Unique Customers",
+            label="Unique Customers",
             value=f"{unique_customers:,}",
             delta="4K+ customers"
         )
     
     with col4:
         st.metric(
-            label="📊 Avg Daily Revenue",
+            label="Avg Daily Revenue",
             value=f"£{avg_daily_revenue:,.0f}",
             delta="£29K/day"
         )
@@ -372,13 +386,13 @@ def main():
     st.sidebar.title("📋 Navigation")
     analysis_type = st.sidebar.radio(
         "Select Analysis:",
-        ["📊 Executive Summary", "📈 Revenue Trends", "🎯 Seasonal Patterns", 
-         "⏰ Time Analysis", "🌍 Geographic Insights", "💡 Recommendations"]
+        ["Executive Summary", "Revenue Trends", "Seasonal Patterns", 
+         "Time Analysis", "Geographic Insights", "Recommendations", "Data Quality"]
     )
     
     # Data overview in sidebar
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📋 Data Overview")
+    st.sidebar.markdown("### Data Overview")
     st.sidebar.info(f"""
     **Period:** Dec 2010 - Dec 2011\n
     **Transactions:** {len(df):,}\n
@@ -388,7 +402,7 @@ def main():
     """)
     
     # Main content based on selection
-    if analysis_type == "📊 Executive Summary":
+    if analysis_type == "Executive Summary":
         st.markdown('<h2 class="sub-header">Key Business Metrics</h2>', unsafe_allow_html=True)
         create_metrics_section(df)
         
@@ -406,7 +420,7 @@ def main():
         # Key insights
         st.markdown('<div class="insight-box">', unsafe_allow_html=True)
         st.markdown("""
-        **🔥 Key Insights:**
+        **Key Insights:**
         - **Peak Season:** November-December drives 25% of annual revenue
         - **Growth:** Exceptional +1,356% year-over-year growth
         - **Seasonality:** Clear holiday shopping patterns with 150% surge in Q4
@@ -414,24 +428,37 @@ def main():
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    elif analysis_type == "📈 Revenue Trends":
+    elif analysis_type == "Revenue Trends":
         st.markdown('<h2 class="sub-header">Daily Revenue Analysis</h2>', unsafe_allow_html=True)
         fig_daily = create_daily_trends_chart(df)
         st.plotly_chart(fig_daily, use_container_width=True)
         
         # Peak days analysis
-        daily_revenue = df.groupby('Date')['Revenue'].sum().reset_index()
+        daily_revenue = df.groupby('Date').agg({
+            'Revenue': 'sum',
+            'DayOfWeek': 'first'  # Get the day of week for each date
+        }).reset_index()
         peak_days = daily_revenue.nlargest(5, 'Revenue')
         
         st.markdown('<h3 class="sub-header">Top 5 Revenue Days</h3>', unsafe_allow_html=True)
-        for i, row in peak_days.iterrows():
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.write(f"**{row['Date']}**")
-            with col2:
-                st.write(f"£{row['Revenue']:,.0f}")
+        
+        # Create a nicely formatted table
+        peak_days_display = peak_days.copy()
+        peak_days_display['Date'] = peak_days_display['Date'].astype(str)
+        peak_days_display['Revenue'] = peak_days_display['Revenue'].apply(lambda x: f"£{x:,.0f}")
+        peak_days_display = peak_days_display.rename(columns={
+            'Date': 'Date',
+            'DayOfWeek': 'Day of Week', 
+            'Revenue': 'Revenue'
+        })
+        
+        st.dataframe(
+            peak_days_display[['Date', 'Day of Week', 'Revenue']], 
+            use_container_width=True,
+            hide_index=True
+        )
     
-    elif analysis_type == "🎯 Seasonal Patterns":
+    elif analysis_type == "Seasonal Patterns":
         st.markdown('<h2 class="sub-header">Seasonal Revenue Analysis</h2>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
@@ -450,13 +477,13 @@ def main():
         
         st.markdown('<div class="insight-box">', unsafe_allow_html=True)
         st.markdown(f"""
-        **🔥 Peak Months:** {', '.join([f'Month {i} (£{v:,.0f})' for i, v in peak_months.items()])}
+        **Peak Months:** {', '.join([f'Month {i} (£{v:,.0f})' for i, v in peak_months.items()])}
         
-        **📉 Low Months:** {', '.join([f'Month {i} (£{v:,.0f})' for i, v in low_months.items()])}
+        **Low Months:** {', '.join([f'Month {i} (£{v:,.0f})' for i, v in low_months.items()])}
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    elif analysis_type == "⏰ Time Analysis":
+    elif analysis_type == "Time Analysis":
         st.markdown('<h2 class="sub-header">Hourly Activity Patterns</h2>', unsafe_allow_html=True)
         fig_hourly = create_hourly_patterns(df)
         st.plotly_chart(fig_hourly, use_container_width=True)
@@ -468,16 +495,16 @@ def main():
         
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("**⏰ Peak Hours:**")
+            st.markdown("**Peak Hours:**")
             for hour, revenue in peak_hours.items():
                 st.write(f"• {hour}:00 - £{revenue:,.0f}")
         
         with col2:
-            st.markdown("**🕐 Slow Hours:**")
+            st.markdown("**Slow Hours:**")
             for hour, revenue in low_hours.items():
                 st.write(f"• {hour}:00 - £{revenue:,.0f}")
     
-    elif analysis_type == "🌍 Geographic Insights":
+    elif analysis_type == "Geographic Insights":
         st.markdown('<h2 class="sub-header">Geographic Revenue Distribution</h2>', unsafe_allow_html=True)
         fig_geo = create_geographic_analysis(df)
         st.plotly_chart(fig_geo, use_container_width=True)
@@ -496,13 +523,13 @@ def main():
             'InvoiceNo': '{:,}'
         }))
     
-    elif analysis_type == "💡 Recommendations":
+    elif analysis_type == "Recommendations":
         st.markdown('<h2 class="sub-header">Strategic Business Recommendations</h2>', unsafe_allow_html=True)
         
         # Promotion timing
         st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
         st.markdown("""
-        **🎯 PROMOTION TIMING STRATEGY**
+        **PROMOTION TIMING STRATEGY**
         - **Target Low Months:** Run major promotions in February-April (lowest revenue)
         - **Pre-Holiday Build:** Launch campaigns in October-November (before peak)
         - **Weekly Optimization:** Focus Tuesday-Wednesday promotions (slower weekdays)
@@ -513,7 +540,7 @@ def main():
         # Restocking strategy
         st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
         st.markdown("""
-        **📦 RESTOCKING STRATEGY**
+        **RESTOCKING STRATEGY**
         - **Seasonal Preparation:** Heavy restocking in September-October (before peak)
         - **Weekly Patterns:** Higher inventory Thursday-Sunday (peak days)
         - **Daily Preparation:** Stock up before 10 AM-4 PM peak hours
@@ -524,7 +551,7 @@ def main():
         # Revenue optimization
         st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
         st.markdown("""
-        **💰 REVENUE OPTIMIZATION**
+        **REVENUE OPTIMIZATION**
         - **Marketing ROI:** Focus spend on October-December (highest ROI months)
         - **Dynamic Pricing:** Implement during peak hours (10 AM-4 PM)
         - **Volume Incentives:** Offer discounts on slower days (Monday-Wednesday)
@@ -535,7 +562,7 @@ def main():
         # Cyclical insights
         st.markdown('<div class="insight-box">', unsafe_allow_html=True)
         st.markdown("""
-        **🌟 CYCLICAL BEHAVIOR PATTERNS**
+        **CYCLICAL BEHAVIOR PATTERNS**
         - **Annual Cycle:** November-December surge, January-April lull
         - **Weekly Cycle:** Thursday peaks, Sunday dips
         - **Daily Cycle:** 10 AM-4 PM prime time, early morning/evening lulls
@@ -543,9 +570,112 @@ def main():
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
+    elif analysis_type == "Data Quality":
+        st.markdown('<h2 class="sub-header">Data Cleaning & Quality Report</h2>', unsafe_allow_html=True)
+        
+        # Data cleaning process overview
+        st.markdown('<div class="insight-box">', unsafe_allow_html=True)
+        st.markdown("""
+        **Data Cleaning Process Overview**
+        
+        The raw retail dataset underwent comprehensive cleaning and preprocessing using `data_cleaning.py`:
+        
+        1. **Data Loading**: Raw CSV loaded with appropriate encoding
+        2. **Quality Analysis**: Identified missing values, data types, and anomalies  
+        3. **Data Cleaning**: Removed invalid transactions and outliers
+        4. **Feature Engineering**: Created time-based features for analysis
+        5. **Optimization**: Optimized data types for performance
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Display current dataset statistics
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Current Dataset Statistics**")
+            st.info(f"""
+            **Rows:** {len(df):,} transactions
+            **Columns:** {len(df.columns)} features
+            **Date Range:** {df['InvoiceDate'].min().strftime('%Y-%m-%d')} to {df['InvoiceDate'].max().strftime('%Y-%m-%d')}
+            **Memory Usage:** {df.memory_usage(deep=True).sum() / 1024**2:.2f} MB
+            """)
+        
+        with col2:
+            st.markdown("**Revenue Quality Metrics**")
+            st.info(f"""
+            **Total Revenue:** £{df['Revenue'].sum():,.2f}
+            **Valid Transactions:** {len(df):,}
+            **Avg Transaction:** £{df['Revenue'].mean():.2f}
+            **Revenue Range:** £{df['Revenue'].min():.2f} - £{df['Revenue'].max():,.2f}
+            """)
+        
+        # Cleaning steps performed
+        st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
+        st.markdown("""
+        **Data Cleaning Steps Performed**
+        
+        - **Removed Returns/Cancellations**: Transactions with negative or zero quantities
+        - **Removed Invalid Pricing**: Transactions with zero or negative unit prices  
+        - **Removed Missing Customers**: Transactions without CustomerID (guest purchases)
+        - **Validated Dates**: Ensured all dates are valid and parseable
+        - **Calculated Revenue**: Generated Revenue = Quantity × UnitPrice
+        - **Optimized Data Types**: Converted to efficient data types for performance
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Feature engineering details
+        st.markdown('<div class="insight-box">', unsafe_allow_html=True)
+        st.markdown("""
+        **Feature Engineering Details**
+        
+        **Time-Based Features Created:**
+        - `Year`, `Month`, `MonthName` - For seasonal analysis
+        - `DayOfWeek`, `Hour` - For weekly and daily patterns
+        - `Date` - For daily revenue aggregation
+        - `Quarter`, `WeekOfYear` - For additional temporal analysis
+        
+        **Data Type Optimizations:**
+        - Categorical columns → `category` type (memory efficient)
+        - Integer columns → appropriate int sizes (`int8`, `int16`, `int32`)
+        - Date columns → `datetime64` for temporal operations
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Data quality metrics
+        st.markdown("**Data Quality Metrics**")
+
+        # Check for any remaining quality issues
+        quality_checks = {
+            "Missing Values": df.isnull().sum().sum(),
+            "Negative Revenue": (df['Revenue'] < 0).sum(),
+            "Zero Revenue": (df['Revenue'] == 0).sum(),
+            "Future Dates": (df['InvoiceDate'] > pd.Timestamp.now()).sum(),
+            "Duplicate Transactions": df.duplicated().sum()
+        }
+        
+        quality_df = pd.DataFrame(list(quality_checks.items()), columns=['Quality Check', 'Issues Found'])
+        quality_df['Status'] = quality_df['Issues Found'].apply(lambda x: 'Clean' if x == 0 else f'{x:,} issues')
+        
+        st.dataframe(quality_df[['Quality Check', 'Status']], use_container_width=True)
+        
+        # Instructions for re-running cleaning
+        st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
+        st.markdown("""
+        **To Re-run Data Cleaning**
+        
+        If you need to re-process the data with different parameters:
+        
+        ```bash
+        python data_cleaning.py
+        ```
+        
+        This will regenerate `data_cleaned.csv` with detailed cleaning logs and statistics.
+        """)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
     # Footer
     st.markdown("---")
-    st.markdown("**📊 Retail Performance Analysis Dashboard** | Created for ADC Analyst Challenge")
+    st.markdown("**Retail Performance Analysis Dashboard** | Created for ADC Analyst Challenge")
 
 if __name__ == "__main__":
     main()
