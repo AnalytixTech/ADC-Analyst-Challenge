@@ -387,7 +387,7 @@ def main():
     analysis_type = st.sidebar.radio(
         "Select Analysis:",
         ["Executive Summary", "Revenue Trends", "Seasonal Patterns", 
-         "Time Analysis", "Geographic Insights", "Recommendations", "Data Quality"]
+         "Time Analysis", "Geographic Insights", "Recommendations"]
     )
     
     # Data overview in sidebar
@@ -475,11 +475,18 @@ def main():
         peak_months = monthly_revenue.nlargest(3)
         low_months = monthly_revenue.nsmallest(3)
         
+        # Create month name mapping
+        month_names_map = {
+            1: 'January', 2: 'February', 3: 'March', 4: 'April',
+            5: 'May', 6: 'June', 7: 'July', 8: 'August',
+            9: 'September', 10: 'October', 11: 'November', 12: 'December'
+        }
+        
         st.markdown('<div class="insight-box">', unsafe_allow_html=True)
         st.markdown(f"""
-        **Peak Months:** {', '.join([f'Month {i} (£{v:,.0f})' for i, v in peak_months.items()])}
+        **Peak Months:** {', '.join([f'{month_names_map[i]} (£{v:,.0f})' for i, v in peak_months.items()])}
         
-        **Low Months:** {', '.join([f'Month {i} (£{v:,.0f})' for i, v in low_months.items()])}
+        **Low Months:** {', '.join([f'{month_names_map[i]} (£{v:,.0f})' for i, v in low_months.items()])}
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -567,109 +574,6 @@ def main():
         - **Weekly Cycle:** Thursday peaks, Sunday dips
         - **Daily Cycle:** 10 AM-4 PM prime time, early morning/evening lulls
         - **Predictable Growth:** Consistent upward trajectory with seasonal variations
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    elif analysis_type == "Data Quality":
-        st.markdown('<h2 class="sub-header">Data Cleaning & Quality Report</h2>', unsafe_allow_html=True)
-        
-        # Data cleaning process overview
-        st.markdown('<div class="insight-box">', unsafe_allow_html=True)
-        st.markdown("""
-        **Data Cleaning Process Overview**
-        
-        The raw retail dataset underwent comprehensive cleaning and preprocessing using `data_cleaning.py`:
-        
-        1. **Data Loading**: Raw CSV loaded with appropriate encoding
-        2. **Quality Analysis**: Identified missing values, data types, and anomalies  
-        3. **Data Cleaning**: Removed invalid transactions and outliers
-        4. **Feature Engineering**: Created time-based features for analysis
-        5. **Optimization**: Optimized data types for performance
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Display current dataset statistics
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Current Dataset Statistics**")
-            st.info(f"""
-            **Rows:** {len(df):,} transactions
-            **Columns:** {len(df.columns)} features
-            **Date Range:** {df['InvoiceDate'].min().strftime('%Y-%m-%d')} to {df['InvoiceDate'].max().strftime('%Y-%m-%d')}
-            **Memory Usage:** {df.memory_usage(deep=True).sum() / 1024**2:.2f} MB
-            """)
-        
-        with col2:
-            st.markdown("**Revenue Quality Metrics**")
-            st.info(f"""
-            **Total Revenue:** £{df['Revenue'].sum():,.2f}
-            **Valid Transactions:** {len(df):,}
-            **Avg Transaction:** £{df['Revenue'].mean():.2f}
-            **Revenue Range:** £{df['Revenue'].min():.2f} - £{df['Revenue'].max():,.2f}
-            """)
-        
-        # Cleaning steps performed
-        st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
-        st.markdown("""
-        **Data Cleaning Steps Performed**
-        
-        - **Removed Returns/Cancellations**: Transactions with negative or zero quantities
-        - **Removed Invalid Pricing**: Transactions with zero or negative unit prices  
-        - **Removed Missing Customers**: Transactions without CustomerID (guest purchases)
-        - **Validated Dates**: Ensured all dates are valid and parseable
-        - **Calculated Revenue**: Generated Revenue = Quantity × UnitPrice
-        - **Optimized Data Types**: Converted to efficient data types for performance
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Feature engineering details
-        st.markdown('<div class="insight-box">', unsafe_allow_html=True)
-        st.markdown("""
-        **Feature Engineering Details**
-        
-        **Time-Based Features Created:**
-        - `Year`, `Month`, `MonthName` - For seasonal analysis
-        - `DayOfWeek`, `Hour` - For weekly and daily patterns
-        - `Date` - For daily revenue aggregation
-        - `Quarter`, `WeekOfYear` - For additional temporal analysis
-        
-        **Data Type Optimizations:**
-        - Categorical columns → `category` type (memory efficient)
-        - Integer columns → appropriate int sizes (`int8`, `int16`, `int32`)
-        - Date columns → `datetime64` for temporal operations
-        """)
-        st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Data quality metrics
-        st.markdown("**Data Quality Metrics**")
-
-        # Check for any remaining quality issues
-        quality_checks = {
-            "Missing Values": df.isnull().sum().sum(),
-            "Negative Revenue": (df['Revenue'] < 0).sum(),
-            "Zero Revenue": (df['Revenue'] == 0).sum(),
-            "Future Dates": (df['InvoiceDate'] > pd.Timestamp.now()).sum(),
-            "Duplicate Transactions": df.duplicated().sum()
-        }
-        
-        quality_df = pd.DataFrame(list(quality_checks.items()), columns=['Quality Check', 'Issues Found'])
-        quality_df['Status'] = quality_df['Issues Found'].apply(lambda x: 'Clean' if x == 0 else f'{x:,} issues')
-        
-        st.dataframe(quality_df[['Quality Check', 'Status']], use_container_width=True)
-        
-        # Instructions for re-running cleaning
-        st.markdown('<div class="recommendation-box">', unsafe_allow_html=True)
-        st.markdown("""
-        **To Re-run Data Cleaning**
-        
-        If you need to re-process the data with different parameters:
-        
-        ```bash
-        python data_cleaning.py
-        ```
-        
-        This will regenerate `data_cleaned.csv` with detailed cleaning logs and statistics.
         """)
         st.markdown('</div>', unsafe_allow_html=True)
     
